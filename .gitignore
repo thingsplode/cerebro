@@ -1,7 +1,9 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
-./DS_Store
+.DS_Store
+my-postgres.conf
 .env
+postgres.docker-entrypoint-initdb.d
 *.py[cod]
 *$py.class
 

@@ -1,6 +1,7 @@
 import psycopg2
 from psycopg2 import sql
 import os
+import json
 import logging
 
 # Set up logging
@@ -25,7 +26,7 @@ def create_connection():
     conn_params = get_db_connection_params()
     return psycopg2.connect(**conn_params)
 
-def extract_databases(filter_builtin_databases=True, print_results=False):
+def extract_databases(filter_builtin_databases=True, print_results=False) -> list[str]:
     """
     Extract non-system databases from PostgreSQL.
     """
@@ -43,13 +44,14 @@ def extract_databases(filter_builtin_databases=True, print_results=False):
             return databases
     finally:
         conn.close()
-
-def extract_schema(database, print_results=False):
+def extract_schema(database, print_results=False) -> dict:
     """
     Extract schema information for the specified database.
+    Returns a dictionary containing the schema information for all tables.
     """
     conn_params = get_db_connection_params(database=database)
     conn = psycopg2.connect(**conn_params)
+    schema_info = {}
     try:
         with conn.cursor() as cursor:
             schema_query = sql.SQL("""
@@ -97,18 +99,15 @@ def extract_schema(database, print_results=False):
 
             cursor.execute(schema_query)
             results = cursor.fetchall()
-
-            # Process and print results
             current_table = None
             for row in results:
                 (table, column, data_type, max_length, nullable, default, description, 
-                 constraint_type, foreign_table, foreign_column) = row    
+                 constraint_type, foreign_table, foreign_column) = row
                 if table != current_table:
-                    if current_table is not None and print_results:
-                        print(f"Current table: {current_table}")
-                    if print_results:
-                        print(f"Table: {table}")
+                    if print_results: print(f"Table: {table}")
                     current_table = table
+                if table not in schema_info:
+                    schema_info[table] = {'columns': {}}
                 
                 type_info = f"{data_type}"
                 if max_length:
@@ -124,23 +123,32 @@ def extract_schema(database, print_results=False):
                 if default:
                     constraints.append(f"DEFAULT {default}")
                 
-                constraint_info = ", ".join(constraints)
+                schema_info[table]['columns'][column] = {
+                    'type': type_info,
+                    'constraints': constraints,
+                    'description': description
+                }
                 
                 if print_results:
-                    print(f"  - {column}: {type_info}")
-                    if constraint_info:
-                        print(f"    Constraints: {constraint_info}")
+                    print(f"  Column: {column}")
+                    print(f"  Type: {type_info}")
+                    if constraints:
+                        print(f"  Constraints: {', '.join(constraints)}")
                     if description:
-                        print(f"    Description: {description}")
+                        print(f"  Description: {description}")
+                    print("  ---")
     finally:
         conn.close()
-
-def extract_table_statistics(database_name, print_results=False):
+    
+    return schema_info
+def extract_table_statistics(database, print_results=False) -> dict:
     """
     Extract basic statistics from each table and column in the specified database.
+    Returns a dictionary containing the statistics for all tables.
     """
-    conn_params = get_db_connection_params(database=database_name)
+    conn_params = get_db_connection_params(database=database)
     conn = psycopg2.connect(**conn_params)
+    table_stats = {}
     try:
         with conn.cursor() as cursor:
             stats_query = """
@@ -150,15 +158,7 @@ def extract_table_statistics(database_name, print_results=False):
                 n_live_tup AS row_count,
                 pg_size_pretty(pg_total_relation_size(relid)) AS total_size,
                 pg_size_pretty(pg_table_size(relid)) AS table_size,
-                pg_size_pretty(pg_indexes_size(relid)) AS index_size,
-                (SELECT array_agg(a.attname || ': ' || 
-                    pg_stats.most_common_vals::text || ' (' || 
-                    pg_stats.most_common_freqs::text || ')')
-                FROM pg_stats
-                JOIN pg_attribute a ON a.attname = pg_stats.attname
-                WHERE pg_stats.schemaname = s.schemaname
-                AND pg_stats.tablename = s.relname
-                AND a.attrelid = s.relid) AS column_stats
+                pg_size_pretty(pg_indexes_size(relid)) AS index_size
             FROM pg_stat_user_tables s
             WHERE schemaname = 'public'
             ORDER BY n_live_tup DESC;
@@ -167,9 +167,17 @@ def extract_table_statistics(database_name, print_results=False):
             cursor.execute(stats_query)
             results = cursor.fetchall()
             
-            # Process and print results
+            # Process results
             for row in results:
-                (schema, table, row_count, total_size, table_size, index_size, column_stats) = row
+                (schema, table, row_count, total_size, table_size, index_size) = row
+                
+                table_stats[table] = {
+                    # 'schema': schema,
+                    'row_count': row_count,
+                    'total_size': total_size,
+                    'table_size': table_size,
+                    'index_size': index_size
+                }
                 
                 if print_results:
                     print(f"\nTable: {table}")
@@ -178,10 +186,39 @@ def extract_table_statistics(database_name, print_results=False):
                     print(f"  Total size: {total_size}")
                     print(f"  Table size: {table_size}")
                     print(f"  Index size: {index_size}")
-                
-                if column_stats and print_results:
-                    print("  Column statistics:")
-                    for stat in column_stats:
-                        print(f"    {stat}")
     finally:
         conn.close()
+    
+    return table_stats
+
+def scan_databases(filter_builtin_databases=True, print_results=False) -> dict:
+    """
+    Extracts schema and statistics for all databases, merging the information.
+    Returns a dictionary containing the combined information for all databases.
+    """
+    all_database_info = {}
+    databases = extract_databases(filter_builtin_databases=filter_builtin_databases, print_results=False)
+    
+    for db_name in databases:
+        db_info = {'name': db_name}
+        
+        # Extract schema
+        schema = extract_schema(database=db_name, print_results=False)
+        
+        # Extract statistics
+        statistics = extract_table_statistics(database=db_name, print_results=False)
+        
+        # Merge schema and statistics
+        tables = {}
+        for table_name in set(schema.keys()) | set(statistics.keys()):
+            table_info = schema.get(table_name, {})
+            table_info.update(statistics.get(table_name, {}))
+            tables[table_name] = table_info
+        
+        db_info['tables'] = tables
+        all_database_info[db_name] = db_info
+    
+    if print_results:
+        print(json.dumps(all_database_info, indent=2))
+    
+    return all_database_info

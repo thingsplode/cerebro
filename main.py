@@ -1,10 +1,12 @@
 import os
+import argparse
 import importlib
+from src.connectors.pgres import scan_databases
 from os.path import join, dirname
 import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
-import argparse
+
 
 dotenv_path = join(dirname(__file__), '.env')
 print(f'dotenv_path: {dotenv_path}')
@@ -119,9 +121,7 @@ def main():
     parser.add_argument("database", nargs="?", choices=["dvdrental"], help="Specify the database to scan")
     args = parser.parse_args()
     if args.connector == "connector" and args.db_type == "pgsql" and args.action == "scan":
-        pgres.extract_databases(filter_builtin_databases=False, print_results=True)
-        # pgres.extract_schema(database="dvdrental", print_results=True)
-        # pgres.extract_table_statistics(database="dvdrental", print_results=True)
+        scan_databases(filter_builtin_databases=False, print_results=True)
     else:
         # Run the default Streamlit app if no command-line arguments are provided
         st.set_page_config(page_title="Data Insight Generator", layout="wide")
