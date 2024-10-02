@@ -1,5 +1,5 @@
 streamlit
 pandas
-pinecone-client
 sentence-transformers
 requests
+qdrant-client

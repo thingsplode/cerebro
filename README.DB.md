@@ -59,6 +59,20 @@ Connect to the database:
 ```bash
 pip install "psycopg[binary,pool]"
 pip install pgcli
-pgcli -h localhost -U postgres -d dvdrental
+pgcli -h localhost -U postgres -d dvdrental -W
+```
+# Installing Quadrant
+A good guide is [here](https://qdrant.tech/documentation/getting-started/) and [here](https://github.com/qdrant/qdrant-python) and [here](https://gorannikolovski.com/blog/qdrant-simplified-setting-up-and-using-a-vector-database)
+
+```bash
+docker pull qdrant/qdrant
+mkdir ~/.dbdata/qdrant
+mkdir -p ~/.qdrant/configs
+lvim ~/.qdrant/configs/config.yaml
+docker run --name vectordb -p 6333:6333 \
+    -v ~/.qdrant/config/config.yaml:/config/config.yaml \
+    -v ~/.dbdata/qdrant/:/qdrant/storage \
+    -d qdrant/qdrant
 ```
 
+Access local dashboard: http://localhost:6333/dashboard
