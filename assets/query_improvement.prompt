@@ -1,0 +1,6 @@
+Identify the ser intent from the following USER_QUERY and improve the clarity, grammar and structure if needed.
+Don't add any additional requirements.
+Don't comment the ask and don't explain the improvement. Just return the improved ask.
+<USER_QUERY>
+{user_query}
+</USER_QUERY>
