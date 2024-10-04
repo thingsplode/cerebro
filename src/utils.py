@@ -1,5 +1,6 @@
 import os
 import json
+import re
 
 def flatten_columns(columns):
     column_texts = list()
@@ -117,4 +118,22 @@ def read_and_prepare_prompt(template_file, **kwargs):
         content = content.replace(placeholder, str(value))
 
     return content
+
+def extract_sql_from_markdown(text):
+    """
+    Extracts SQL code blocks from markdown-formatted text.
+
+    Args:
+    text (str): The input text containing markdown-formatted SQL code blocks.
+
+    Returns:
+    list: A list of extracted SQL code snippets.
+    """
+    sql_blocks = []
+    pattern = r'```sql\s*(.*?)\s*```'
+    matches = re.findall(pattern, text, re.DOTALL)
     
+    for match in matches:
+        sql_blocks.append(match.strip())
+    
+    return sql_blocks

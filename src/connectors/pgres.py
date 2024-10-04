@@ -222,3 +222,49 @@ def scan_databases(filter_builtin_databases=True, print_results=False) -> dict:
         print(json.dumps(all_database_info, indent=2))
     
     return all_database_info
+
+def execute_sql_query(database: str, query: str) -> dict:
+    """
+    Executes a SQL query on the specified database and returns the result or the execution error.
+
+    Args:
+    database (str): The name of the database to connect to.
+    query (str): The SQL query to execute.
+
+    Returns:
+    dict: A dictionary containing either the query result or an error message.
+    """
+    try:
+        conn_params = get_db_connection_params()
+        conn_params['dbname'] = database
+        
+        conn = psycopg2.connect(**conn_params)
+        
+        with conn.cursor() as cur:
+            cur.execute(query)
+            
+            if cur.description:
+                columns = [desc[0] for desc in cur.description]
+                results = cur.fetchall()
+                return {
+                    "success": True,
+                    "columns": columns,
+                    "data": results
+                }
+            else:
+                conn.commit()
+                return {
+                    "success": True,
+                    "message": f"Query executed successfully. Rows affected: {cur.rowcount}"
+                }
+    
+    except psycopg2.Error as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+    
+    finally:
+        if conn:
+            conn.close()
+
