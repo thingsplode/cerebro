@@ -1,4 +1,6 @@
 Generate an executable SQL query to answer the USER_QUESTION provided below. 
+First, analyze the user's question and determine the necessary tables and joins. Then, write the SQL query.
+
 Use the RELEVANT_SCHEMA or the FULL_SCHEMA as a source of allowed tables and columns.
 <RELEVANT_SCHEMA>
 {relevant_schema}
@@ -12,3 +14,6 @@ generate the SQL query.
 <USER_QUESTION>
 {user_question}
 </USER_QUESTION>
+
+SQL query:
+```sql

@@ -61,6 +61,12 @@ def generate_sql_with_ollama(user_question, relevant_schema, all_schema=None, pr
     return prompt_llm(prompt, system_prompt=system_prompt, context=previous_conversation, model="llama3.1")
     # return process_user_query(prompt, system_prompt=system_prompt, model="sqlcoder")
 
+def generate_refined_sql(user_query, relevant_schema, all_schema=None, error_message=None, previous_conversation=None, model="llama3.1"):
+    global assets
+    system_prompt = read_and_prepare_prompt(join(assets, "generate_sql_system.prompt"))
+    prompt = read_and_prepare_prompt(join(assets, "generate_sql.prompt"), user_question=user_query, relevant_schema=relevant_schema, all_schema=all_schema)
+    print(f"Prompt: {prompt}")
+    return prompt_llm(prompt, system_prompt=system_prompt, context=previous_conversation, model=model)
 
 def improve_prompt(user_query, model="llama3.1"):
     global assets
