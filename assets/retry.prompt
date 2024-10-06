@@ -1,9 +1,10 @@
-The previous SQL query resulted in the following error:
+The previously generated SQL query resulted in the following error:
 <ERROR_MESSAGE>
 {error_message}
 </ERROR_MESSAGE>
 
-Please analyze the error and generate a corrected SQL query.
+Please analyze the error and generate a corrected SQL SELECT query, that takes into account the error message,
+the initial user ask, the initial SQL query and the schema information.
 <USER_QUESTION>
 {user_question}
 </USER_QUESTION>
