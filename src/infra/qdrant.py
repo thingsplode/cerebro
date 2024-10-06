@@ -5,7 +5,8 @@ import logging
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from sentence_transformers import SentenceTransformer
-from src.utils import create_schema_text
+from src.utils import table_info_to_ddl
+# from src.llmops import generate_embedding_with_ollama
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -13,6 +14,8 @@ logger = logging.getLogger(__name__)
 
 # Initialize the SentenceTransformer model
 model = SentenceTransformer('all-MiniLM-L6-v2')
+# model = SentenceTransformer('s2593817/sft-sql-embedding')   
+# model = SentenceTransformer('RaduGabriel/BGE-M3-SQL')
 
 
 def initialize_qdrant():
@@ -55,6 +58,7 @@ atexit.register(cleanup_qdrant)
 
 def search_schema_embeddings(user_query, limit=5):
     query_embedding = model.encode(user_query)
+    # query_embedding = generate_embedding_with_ollama(user_query)
     search_result = client.search(
         collection_name=collection_name,
         query_vector=query_embedding.tolist(),
@@ -62,7 +66,7 @@ def search_schema_embeddings(user_query, limit=5):
     )
     return search_result
 
-def retrieve_index_ids_by_payload(payload_filter, limit=100):
+def retrieve_index_ids_by_payload(payload_filter: dict, limit: int = 100):
     """
     Retrieve index IDs from Qdrant based on payload values.
 
@@ -111,10 +115,12 @@ def create_and_store_schema_embeddings(db_schemas):
     for db_name, db_info in db_schemas.items():
         for table_name, table_info in db_info['tables'].items():
             # Create a string representation of the schema
-            schema_text = create_schema_text(db_name, table_name, table_info)
+            # schema_text = create_schema_text(db_name, table_name, table_info)
+            schema_text = table_info_to_ddl(db_name, table_name, table_info)
             
             # Generate embedding
             embedding = model.encode(schema_text).tolist()
+            # embedding = generate_embedding_with_ollama(schema_text)
             existing_ids = retrieve_index_ids_by_payload({"database": db_name, "table": table_name})
             q_id = existing_ids[0] if len(existing_ids) > 0 else str(uuid.uuid4())
             if len(existing_ids) > 0:

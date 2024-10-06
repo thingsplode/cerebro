@@ -44,6 +44,7 @@ def extract_databases(filter_builtin_databases=True, print_results=False) -> lis
             return databases
     finally:
         conn.close()
+
 def extract_schema(database, print_results=False) -> dict:
     """
     Extract schema information for the specified database.
@@ -126,7 +127,7 @@ def extract_schema(database, print_results=False) -> dict:
                 schema_info[table]['columns'][column] = {
                     'type': type_info,
                     'constraints': constraints,
-                    'description': description
+                    'description': description,
                 }
                 
                 if print_results:
@@ -141,61 +142,134 @@ def extract_schema(database, print_results=False) -> dict:
         conn.close()
     
     return schema_info
-def extract_table_statistics(database, print_results=False) -> dict:
+
+def extract_table_statistics(database, print_results=False):
     """
-    Extract basic statistics from each table and column in the specified database.
-    Returns a dictionary containing the statistics for all tables.
+    Extracts table statistics from the specified database, including distribution boundaries.
+    
+    Args:
+    database (str): The name of the database to extract statistics from.
+    print_results (bool): Whether to print the results to console.
+    
+    Returns:
+    dict: A dictionary containing table statistics.
     """
-    conn_params = get_db_connection_params(database=database)
-    conn = psycopg2.connect(**conn_params)
-    table_stats = {}
+    conn_params = get_db_connection_params()
+    conn_params['dbname'] = database
+    statistics = {}
+    
     try:
+        conn = psycopg2.connect(**conn_params)
         with conn.cursor() as cursor:
-            stats_query = """
-            SELECT 
-                schemaname,
+            # Query to get basic table statistics
+            basic_stats_query = """
+            SELECT
+                schemaname AS db_name,
                 relname AS table_name,
                 n_live_tup AS row_count,
                 pg_size_pretty(pg_total_relation_size(relid)) AS total_size,
                 pg_size_pretty(pg_table_size(relid)) AS table_size,
                 pg_size_pretty(pg_indexes_size(relid)) AS index_size
-            FROM pg_stat_user_tables s
-            WHERE schemaname = 'public'
-            ORDER BY n_live_tup DESC;
+            FROM
+                pg_stat_user_tables
+            ORDER BY
+                n_live_tup DESC;
             """
             
-            cursor.execute(stats_query)
-            results = cursor.fetchall()
+            cursor.execute(basic_stats_query)
+            basic_results = cursor.fetchall()
             
-            # Process results
-            for row in results:
-                (schema, table, row_count, total_size, table_size, index_size) = row
-                
-                table_stats[table] = {
-                    # 'schema': schema,
+            for row in basic_results:
+                schema_name, table_name, row_count, total_size, table_size, index_size = row
+                statistics[table_name] = {
                     'row_count': row_count,
                     'total_size': total_size,
                     'table_size': table_size,
-                    'index_size': index_size
+                    'index_size': index_size,
+                    'columns': {}
                 }
                 
+                # Query to get column statistics including distribution boundaries
+                column_stats_query = f"""
+                SELECT
+                    a.attname AS column_name,
+                    pg_stats.n_distinct,
+                    pg_stats.null_frac,
+                    pg_stats.avg_width,
+                    pg_stats.n_distinct,
+                    pg_stats.correlation,
+                    pg_stats.most_common_vals,
+                    pg_stats.most_common_freqs,
+                    pg_stats.histogram_bounds
+                FROM
+                    pg_stats
+                JOIN
+                    pg_attribute a ON pg_stats.attname = a.attname
+                WHERE
+                    pg_stats.schemaname = %s AND pg_stats.tablename = %s
+                    AND a.attnum > 0 AND NOT a.attisdropped
+                ORDER BY
+                    a.attnum;
+                """
+                
+                cursor.execute(column_stats_query, (schema_name, table_name,))
+                column_results = cursor.fetchall()
+                
+                for col_row in column_results:
+                    (col_name, n_distinct, null_frac, avg_width, n_distinct, 
+                     correlation, most_common_vals, most_common_freqs, histogram_bounds) = col_row
+                    
+                    statistics[table_name]['columns'][col_name] = {
+                        'n_distinct': n_distinct,
+                        'null_fraction': null_frac,
+                        'avg_width': avg_width,
+                        'correlation': correlation,
+                        'most_common_values': most_common_vals,
+                        # 'most_common_frequencies': most_common_freqs,
+                        'histogram_bounds': histogram_bounds
+                    }
+                
                 if print_results:
-                    print(f"\nTable: {table}")
-                    print(f"  Schema: {schema}")
-                    print(f"  Row count: {row_count}")
-                    print(f"  Total size: {total_size}")
-                    print(f"  Table size: {table_size}")
-                    print(f"  Index size: {index_size}")
+                    print(f"Table: {table_name}")
+                    print(f"  Row Count: {row_count}")
+                    print(f"  Total Size: {total_size}")
+                    print(f"  Table Size: {table_size}")
+                    print(f"  Index Size: {index_size}")
+                    print("  Columns:")
+                    for col_name, col_stats in statistics[table_name]['columns'].items():
+                        print(f"    {col_name}:")
+                        print(f"      Distinct Values: {col_stats['n_distinct']}")
+                        print(f"      Null Fraction: {col_stats['null_fraction']}")
+                        print(f"      Average Width: {col_stats['avg_width']}")
+                        print(f"      Correlation: {col_stats['correlation']}")
+                        print(f"      Most Common Values: {col_stats['most_common_values']}")
+                        print(f"      Most Common Frequencies: {col_stats['most_common_frequencies']}")
+                        print(f"      Histogram Bounds: {col_stats['histogram_bounds']}")
+                    print("  ---")
+    
     finally:
         conn.close()
     
-    return table_stats
+    return statistics
+
+
 
 def scan_databases(filter_builtin_databases=True, print_results=False) -> dict:
     """
     Extracts schema and statistics for all databases, merging the information.
     Returns a dictionary containing the combined information for all databases.
     """
+    def merge(source, destination):
+        for key, value in source.items():
+            if isinstance(value, dict):
+                # get node or create one
+                node = destination.setdefault(key, {})
+                merge(value, node)
+            else:
+                destination[key] = value
+
+        return destination
+    
     all_database_info = {}
     databases = extract_databases(filter_builtin_databases=filter_builtin_databases, print_results=False)
     
@@ -204,15 +278,14 @@ def scan_databases(filter_builtin_databases=True, print_results=False) -> dict:
         
         # Extract schema
         schema = extract_schema(database=db_name, print_results=False)
-        
         # Extract statistics
         statistics = extract_table_statistics(database=db_name, print_results=False)
         
         # Merge schema and statistics
         tables = {}
-        for table_name in set(schema.keys()) | set(statistics.keys()):
-            table_info = schema.get(table_name, {})
-            table_info.update(statistics.get(table_name, {}))
+        for table_name in schema.keys():
+            table_info = schema.get(table_name, {}).copy()
+            merge(statistics.get(table_name, {}), table_info)
             tables[table_name] = table_info
         
         db_info['tables'] = tables

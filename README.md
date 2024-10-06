@@ -10,7 +10,7 @@ Instructions to Run the Application:
 Install Required Packages:
 
 ```bash
-pip install streamlit pandas pinecone-client sentence-transformers requests
+pip install -r requirements.txt
 ```
 Set Up Pinecone:
 Replace 'YOUR_PINECONE_API_KEY' and 'YOUR_PINECONE_ENVIRONMENT' with your actual Pinecone API key and environment.
