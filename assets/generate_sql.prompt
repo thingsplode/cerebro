@@ -7,7 +7,7 @@ Use the RELEVANT_SCHEMA or the FULL_SCHEMA as a source of allowed tables and col
 </RELEVANT_SCHEMA>
 
 <FULL_SCHEMA>
-{all_schema}
+{full_schema}
 </FULL_SCHEMA>
 Think step by step, figure out the exact tables, columns and relations that are necessary to answer the USER_QUESTION and then
 generate the SQL query.

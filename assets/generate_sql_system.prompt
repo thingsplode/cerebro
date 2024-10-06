@@ -10,4 +10,6 @@ in the provided RELEVANT_SCHEMA or in the FULL_SCHEMA sections.
 that are synonyms of the nouns in the user's question.
 6. Use precise PostgreSQL syntax and keywords and minimize SQL execution time while ensuring correctness.
 7. If you generate aliases with spaces in them, use double quotes around them.
-8. The SQL query must be formatted and included in markdown code block with ```sql tag.
+8. Don't create tables, views or functions. Use CTEs instead.
+9. Don't generate data modification statements (INSERT, UPDATE, DELETE) or DDL (CREATE, ALTER, DROP) statements.
+10. The SQL query must be formatted and included in markdown code block with ```sql tag.

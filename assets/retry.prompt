@@ -1,0 +1,26 @@
+The previous SQL query resulted in the following error:
+<ERROR_MESSAGE>
+{error_message}
+</ERROR_MESSAGE>
+
+Please analyze the error and generate a corrected SQL query.
+<USER_QUESTION>
+{user_question}
+</USER_QUESTION>
+
+Use the original SQL query as a starting point, but correct the syntax and logic to avoid the error.
+<ORIGINAL_SQL_QUERY>
+{original_query}
+</ORIGINAL_SQL_QUERY>
+
+Relevant schema:
+<RELEVANT_SCHEMA
+{relevant_schema}   
+</RELEVANT_SCHEMA>
+Full schema:
+<FULL_SCHEMA>
+{full_schema}
+</FULL_SCHEMA>
+
+Corrected SQL Query:
+```sql

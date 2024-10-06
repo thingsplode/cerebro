@@ -42,7 +42,7 @@ def generate_embedding_with_ollama(text: str, model: str = "all-minilm-l6-v2") -
         logger.error(f"Error processing Ollama response: {e}")
         raise e
 
-def generate_sql_with_ollama(user_question, relevant_schema, all_schema=None, previous_conversation=None):
+def generate_sql_with_ollama(user_question, relevant_schema, all_schema=None, context=None):
     """
     Generate SQL using a local Ollama deployment with a custom prompt.
 
@@ -56,24 +56,38 @@ def generate_sql_with_ollama(user_question, relevant_schema, all_schema=None, pr
     global assets
     system_prompt = read_and_prepare_prompt(join(assets, "generate_sql_system.prompt"))
 
-    prompt = read_and_prepare_prompt(join(assets, "generate_sql.prompt"), user_question=user_question, relevant_schema=relevant_schema, all_schema=all_schema)
-    print(f"Prompt: {prompt}")
-    return prompt_llm(prompt, system_prompt=system_prompt, context=previous_conversation, model="llama3.1")
+    prompt = read_and_prepare_prompt(join(assets, "generate_sql.prompt"), 
+                                     user_question=user_question, 
+                                     relevant_schema=relevant_schema, 
+                                     full_schema=all_schema)
+    logger.debug(f"Prompt: {prompt}")
+    return prompt_llm(prompt, system_prompt=system_prompt, context=context, model="llama3.1")
     # return process_user_query(prompt, system_prompt=system_prompt, model="sqlcoder")
 
-def generate_refined_sql(user_query, relevant_schema, all_schema=None, error_message=None, previous_conversation=None, model="llama3.1"):
+def generate_refined_sql(user_query, 
+                         initial_sql, 
+                         relevant_schema, 
+                        all_schema=None, 
+                        error_message=None,
+                        context=None,
+                        model="llama3.1"):
     global assets
     system_prompt = read_and_prepare_prompt(join(assets, "generate_sql_system.prompt"))
-    prompt = read_and_prepare_prompt(join(assets, "generate_sql.prompt"), user_question=user_query, relevant_schema=relevant_schema, all_schema=all_schema)
-    print(f"Prompt: {prompt}")
-    return prompt_llm(prompt, system_prompt=system_prompt, context=previous_conversation, model=model)
+    prompt = read_and_prepare_prompt(join(assets, "retry.prompt"), 
+                                     user_question=user_query, 
+                                     original_query=initial_sql,
+                                     relevant_schema=relevant_schema, 
+                                     full_schema=all_schema,
+                                     error_message=error_message)
+    logger.debug(f"Refined Prompt: {prompt}")
+    return prompt_llm(prompt, system_prompt=system_prompt, context=context, model=model)
 
 def improve_prompt(user_query, model="llama3.1"):
     global assets
     prompt = read_and_prepare_prompt(join(assets, "query_improvement.prompt"), user_query=user_query)
     response = prompt_llm(prompt, model=model)
-    logger.info(f"Improved query: {response}")
-    return response
+    logger.info(f"Improved query: {response['response']}")
+    return response['response']
 
 def prompt_llm(prompt, system_prompt=None, context=None, model='llama3.1'):
     ollama_url = "http://localhost:11434/api/generate"
@@ -81,7 +95,8 @@ def prompt_llm(prompt, system_prompt=None, context=None, model='llama3.1'):
         "model": model,
         "prompt": prompt,
         "system": system_prompt,
-        "stream": False
+        "stream": False,
+        "context": context
     }
     if context:
         payload.update(context = context)
@@ -90,7 +105,10 @@ def prompt_llm(prompt, system_prompt=None, context=None, model='llama3.1'):
         response = requests.post(ollama_url, json=payload)
         response.raise_for_status()
         result = response.json()
-        return result['response'].strip()
+        return {
+            'response': result['response'].strip(),
+            'context': result['context']
+        }
     except requests.RequestException as e:
         logger.error(f"Error calling Ollama API: {e}")
         if isinstance(e, requests.HTTPError):
@@ -102,4 +120,4 @@ def prompt_llm(prompt, system_prompt=None, context=None, model='llama3.1'):
             logger.error("Timeout Error: The request to Ollama API timed out")
         else:
             logger.error(f"Unexpected error type: {type(e).__name__}")
-        return None
+        raise e
